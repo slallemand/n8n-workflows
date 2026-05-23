@@ -1,0 +1,692 @@
+{
+  "name": "NestorAI - Maison",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "allow_1",
+              "name": "allow",
+              "type": "string",
+              "value": "NestorAI"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "03e7b590-8d7b-4ed5-a3c0-1a1b836bfb56",
+      "name": "AllowList",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -720,
+        0
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "auth_check",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $('Listen for incoming events').item.json.envelope.dataMessage.groupInfo.groupName }}",
+              "rightValue": "={{ $('AllowList').item.json.allow }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "6d896558-1b28-4cf9-af2d-d8f89f73a23d",
+      "name": "If1",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -304,
+        0
+      ],
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "text",
+              "stringValue": "={{ $('Listen for incoming events').item.json.messageText || '' }}"
+            },
+            {
+              "name": "sessionId",
+              "stringValue": "={{ $('Listen for incoming events').item.json.envelope.sourceNumber }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "265a8207-0263-490c-9ae5-bba56c48476a",
+      "name": "Voice or Text",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -80,
+        -16
+      ],
+      "typeVersion": 3.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "voice_check",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $('Listen for incoming events').item.json.messageText }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "350a2c41-5acb-4658-a931-30e9896ab990",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        80,
+        -16
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "angie_session_default",
+        "contextWindowLength": 10
+      },
+      "id": "a510e71d-d823-4c74-924e-9ef1d7639f8f",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        1008,
+        256
+      ],
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-signal-cli-rest-api.signalTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        0
+      ],
+      "id": "a8305f05-9b9b-40fc-b801-8dac55a48609",
+      "name": "Listen for incoming events"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "google/gemma-4-31B-it",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        672,
+        256
+      ],
+      "id": "8260739e-6e2d-4a0b-afa3-e24e454d68c9",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "recipient": "={{ $('StoreGroupID').first().json.groupId }}",
+        "message": "={{ $('Nestor, AI Assistant').item.json.output }}"
+      },
+      "type": "n8n-nodes-signal-cli-rest-api.signal",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        -16
+      ],
+      "id": "a876a4d3-3dfa-40ca-9129-89f8d40bc9d6",
+      "name": "Signal",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "model": "gemma3n:latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        832,
+        256
+      ],
+      "id": "fd9d8d5c-413c-43f1-a14e-76b5e5228f3d",
+      "name": "Ollama Chat Model"
+    },
+    {
+      "parameters": {
+        "operation": "getGroups"
+      },
+      "type": "n8n-nodes-signal-cli-rest-api.signal",
+      "typeVersion": 1,
+      "position": [
+        -1024,
+        0
+      ],
+      "id": "96d3af9b-d856-494b-b46f-619fdb12a2fe",
+      "name": "GetGroups"
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "recipient": "={{ $('Listen for incoming events').item.json.envelope.sourceNumber }}",
+        "targetSentTimestamp": "={{ $('Listen for incoming events').item.json.envelope.timestamp }}"
+      },
+      "type": "n8n-nodes-signal-cli-rest-api.signal",
+      "typeVersion": 1,
+      "position": [
+        -864,
+        0
+      ],
+      "id": "58fe1b9f-7a36-4ccb-b584-8fefedc05038",
+      "name": "Marks As Read"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=Tu es un assistant serviable.\nTu t'appelles Nestor.\n\nLa date d’aujourd’hui est {{ $now }}.\n\nDirectives :\n\nLors de la récupération des e-mails, filtre tous les e-mails promotionnels.\nLors de la synthèse des e-mails, inclure l’expéditeur, la date du message, l’objet et un résumé bref de l’e-mail.\nSi l’utilisateur n’a pas précisé de date dans sa demande, suppose qu’il parle d’aujourd’hui.\nUtilise l'outil Meteo pour la météo.\nLors de la réponse aux questions sur les événements du calendrier, filtre les événements qui ne concernent pas la question. Par exemple, si la question concerne les événements d’aujourd’hui, ne réponds qu’avec les événements d’aujourd’hui. Ne mentionne pas les événements futurs s’ils sont à plus d’une semaine."
+        }
+      },
+      "id": "e8e20e12-8a57-47cb-985c-b12aed4cbc31",
+      "name": "Nestor, AI Assistant",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        864,
+        -16
+      ],
+      "typeVersion": 3.1
+    },
+    {
+      "parameters": {
+        "operation": "downloadAttachment",
+        "attachmentId": "={{ $('Listen for incoming events').item.json.attachments[0].id }}"
+      },
+      "type": "n8n-nodes-signal-cli-rest-api.signal",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -464
+      ],
+      "id": "5406506b-e294-48de-b6dc-e0c056a12716",
+      "name": "DownloadAttachment"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Utilise cet outil pour obtenir la météo actuelle à <ville>. Ne demande pas de paramètres supplémentaires.",
+        "resource": "state",
+        "entityId": "weather.<ville>"
+      },
+      "type": "n8n-nodes-base.homeAssistantTool",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        240
+      ],
+      "id": "e864881d-7864-42ee-b987-d2dcbca8317d",
+      "name": "Meteo"
+    },
+    {
+      "parameters": {
+        "operation": "startTyping",
+        "recipient": "={{\n$('GetGroups').item.json.find(g => g.name === $('AllowList').item.json.allow).id \n}}"
+      },
+      "type": "n8n-nodes-signal-cli-rest-api.signal",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        0
+      ],
+      "id": "4cc5172c-b68b-4928-af51-26a1895ea5a5",
+      "name": "StartTyping"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "db1b27af-6be6-42cb-83ab-eb84fd1d7241",
+              "name": "groupId",
+              "value": "={{ $('GetGroups').item.json.find(g => g.name === $('AllowList').item.json.allow).id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -576,
+        0
+      ],
+      "id": "c5867548-4453-40e1-b7c2-8b425dcca15f",
+      "name": "StoreGroupID"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://<hass_url>/api/mcp",
+        "authentication": "bearerAuth",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        1312,
+        256
+      ],
+      "id": "60cdcb24-5f9a-452e-af16-748970929a14",
+      "name": "HASS MCP"
+    },
+    {
+      "parameters": {
+        "operation": "stopTyping",
+        "recipient": "={{ $('StoreGroupID').first().json.groupId }}"
+      },
+      "type": "n8n-nodes-signal-cli-rest-api.signal",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -16
+      ],
+      "id": "024dfd93-7105-4475-8d04-23765bc2d5f8",
+      "name": "StopTyping"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.infomaniak.com/1/ai/<product number>/openai/audio/transcriptions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper"
+            },
+            {
+              "name": "response_format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        384,
+        -464
+      ],
+      "id": "9907a823-ab6b-4307-8b7b-a5d3d79be41c",
+      "name": "Speech 2 Text"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        528,
+        -464
+      ],
+      "id": "1ce2160d-dbe8-487c-ac11-b51e7e1f163a",
+      "name": "Wait",
+      "webhookId": ""
+    },
+    {
+      "parameters": {
+        "url": "=https://api.infomaniak.com/1/ai/<product number>/results/{{ $json.batch_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        704,
+        -464
+      ],
+      "id": "c89e3b4d-af65-40b8-b7cf-952eaf7c867d",
+      "name": "GetTranscription",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "",
+          "name": "Bearer Auth account for InfomaniakAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "73ca7cf8-3d05-46d6-b633-b1a4d18bf4af",
+              "name": "text",
+              "value": "={{ JSON.parse($('GetTranscription').item.json.data).text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        912,
+        -464
+      ],
+      "id": "ce9aefbc-06e1-4171-a533-1b3a4578e9e7",
+      "name": "ParseTranscription"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "DownloadAttachment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nestor, AI Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Voice or Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AllowList": {
+      "main": [
+        [
+          {
+            "node": "StoreGroupID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Nestor, AI Assistant",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voice or Text": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listen for incoming events": {
+      "main": [
+        [
+          {
+            "node": "GetGroups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Nestor, AI Assistant",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Nestor, AI Assistant",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "GetGroups": {
+      "main": [
+        [
+          {
+            "node": "Marks As Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marks As Read": {
+      "main": [
+        [
+          {
+            "node": "AllowList",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nestor, AI Assistant": {
+      "main": [
+        [
+          {
+            "node": "StopTyping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DownloadAttachment": {
+      "main": [
+        [
+          {
+            "node": "Speech 2 Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meteo": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nestor, AI Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "StartTyping": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "StoreGroupID": {
+      "main": [
+        [
+          {
+            "node": "StartTyping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HASS MCP": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nestor, AI Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "StopTyping": {
+      "main": [
+        [
+          {
+            "node": "Signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speech 2 Text": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "GetTranscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetTranscription": {
+      "main": [
+        [
+          {
+            "node": "ParseTranscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ParseTranscription": {
+      "main": [
+        [
+          {
+            "node": "Nestor, AI Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Europe/Paris",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "cac134b0-a086-4045-98c0-7a59a8d6265c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "id": "",
+  "tags": []
+}

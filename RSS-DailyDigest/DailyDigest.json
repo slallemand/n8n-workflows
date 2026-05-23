@@ -1,0 +1,738 @@
+{
+  "name": "Daily Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "function clean(input) {\n  if (!input) return '';\n  if (typeof input === 'object') {\n    input = input.content || input['#text'] || input.value || '';\n  }\n  if (typeof input !== 'string') input = String(input);\n  return input.replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim();\n}\n\nfunction detectLang(text) {\n  if (!text || text.length < 20) return 'unknown';\n  const fr = new Set(['le','la','les','un','une','des','est','sont','avec','pour','dans','sur','qui','que','ce','au','du','en','il','elle','nous','vous','ils','elles','pas','plus','par','ou','et','se','ne','si','de','je','tu','on','mais','donc','car','ni','or']);\n  const en = new Set(['the','a','an','is','are','was','were','with','for','in','on','at','to','of','and','or','but','not','this','that','it','its','be','been','has','have','had','will','would','can','could','from','as','by','about','which','when','who','their','they','we','you','he','she']);\n  const words = text.toLowerCase().split(/\\W+/);\n  let frScore = 0, enScore = 0;\n  for (const w of words) {\n    if (fr.has(w)) frScore++;\n    if (en.has(w)) enScore++;\n  }\n  if (frScore + enScore < 4) return 'unknown';\n  return frScore >= enScore ? 'fr' : 'en';\n}\n\nreturn items.flatMap(item => {\n  const articles = item.json.items || [item.json];\n\n  return articles.map(article => {\n    const title = article.title || '';\n    const summary = clean(article.contentSnippet || article.summary || article.content || '');\n    const id = article.guid || article.id || title;\n    const language = detectLang(title + ' ' + summary);\n\n    return {\n      json: {\n        id,\n        pageContent: `${title}\\n\\n${summary}`,\n        metadata: {\n          id,\n          title,\n          url: article.canonical?.[0]?.href || article.origin?.htmlUrl || article.url || article.link || '',\n          source: article.source?.title || 'RSS',\n          published_at: article.isoDate || article.published || null,\n          language\n        }\n      }\n    };\n  });\n});"
+      },
+      "id": "7209bb2c-0028-4984-8b27-233d705a48eb",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const seen = new Set();\n\nreturn items.filter(i => {\n  const key = i.json.metadata.id || i.json.metadata.url;\n  if (seen.has(key)) return false;\n  seen.add(key);\n  return true;\n});"
+      },
+      "id": "0d588d81-11cb-4cab-b627-79bf7c6572d2",
+      "name": "Dedup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1328,
+        80
+      ],
+      "id": "83b6cd4f-d768-43e9-8608-1a3c3c034026",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://<freshrss_url>/p/api/greader.php/accounts/ClientLogin",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "Email",
+              "value": ""
+            },
+            {
+              "name": "Passwd",
+              "value": ""
+            },
+            {
+              "name": "accountType",
+              "value": "HOSTED_OR_GOOGLE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -768,
+        80
+      ],
+      "id": "b969eb23-c0ca-4a7e-a358-e4ed57abb108",
+      "name": "FreshRSSLogin"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = items[0].json.data;\n// On cherche la ligne qui commence par \"Auth=\" et on prend la valeur\nconst authLine = response.split('\\n').find(line => line.startsWith('Auth='));\nconst token = authLine ? authLine.split('=')[1] : '';\n\nreturn [{\n  json: {\n    freshrss_token: token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        80
+      ],
+      "id": "9e2fcb3d-ba4e-4f26-ad01-e7e12ea9d35c",
+      "name": "GetToken"
+    },
+    {
+      "parameters": {
+        "url": "https://<freshrss_url>/p/api/greader.php/reader/api/0/stream/contents/user/-/label/<second label>",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "n",
+              "value": "100"
+            },
+            {
+              "name": "ot",
+              "value": "={{ Math.floor((Date.now() / 1000) - 86400) }}"
+            },
+            {
+              "name": "output",
+              "value": "json"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=GoogleLogin auth={{ $json.freshrss_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -304,
+        -112
+      ],
+      "id": "578cee12-254b-4dc1-b0c6-ce49e78f5ace",
+      "name": "FreshRSSGetItems-<second label>"
+    },
+    {
+      "parameters": {
+        "url": "https://<freshrss_url>/p/api/greader.php/reader/api/0/stream/contents/user/-/label/<first label>",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "n",
+              "value": "20"
+            },
+            {
+              "name": "ot",
+              "value": "={{ Math.floor((Date.now() / 1000) - 86400) }}"
+            },
+            {
+              "name": "output",
+              "value": "json"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=GoogleLogin auth={{ $json.freshrss_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -304,
+        112
+      ],
+      "id": "06c356ae-7faa-4e58-acdf-16a660b9b522",
+      "name": "FreshRSSGetItems-<first label>"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -16,
+        112
+      ],
+      "id": "2cfb2f57-15b5-40e4-b11d-1bde3a00a861",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.infomaniak.com/2/ai/<product number>/openai/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "bge_multilingual_gemma2"
+            },
+            {
+              "name": "input",
+              "value": "={{ $json.pageContent }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        640,
+        112
+      ],
+      "id": "21f75d0b-adff-4a76-973c-21187b7c5880",
+      "name": "GetEmbedding",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "",
+          "name": "Bearer Auth account for InfomaniakAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map((item, i) => {\n  const embeddingData = item.json.data?.[0]?.embedding || item.json.embedding;\n  if (!embeddingData) throw new Error(`No embedding in response for item ${i}: ` + JSON.stringify(item.json));\n\n  // Get the original article from Dedup node (same index, same order)\n  const article = $('Dedup').all()[i].json;\n\n  // Format vector literal for pgvector\n  const vectorStr = '[' + embeddingData.join(',') + ']';\n\n  // Escape single quotes for SQL string literals\n  const text = (article.pageContent || '').replace(/'/g, \"''\");\n  const metadataJson = JSON.stringify(article.metadata || {}).replace(/'/g, \"''\");\n  const articleId = (article.metadata?.id || '').replace(/'/g, \"''\");\n\n  const sqlQuery = `INSERT INTO rss_articles (text, metadata, embedding)\n  SELECT '${text}', '${metadataJson}'::jsonb, '${vectorStr}'::vector\n  WHERE NOT EXISTS (\n    SELECT 1 FROM rss_articles WHERE metadata->>'id' = '${articleId}'\n  )`;\n\n  return {\n    json: {\n      sqlQuery,\n      title: article.metadata?.title\n    }\n  };\n});"
+      },
+      "id": "982872cf-a42d-4ab6-8622-20bf83321e9d",
+      "name": "PrepareInsert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.sqlQuery }}",
+        "options": {}
+      },
+      "id": "415d67e6-0410-4715-977c-facb344e9b71",
+      "name": "InsertArticle",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1088,
+        112
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "pgvector-rss"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "interests_text",
+              "name": "centers_of_interest",
+              "value": "Intelligence Artificielle , voiture électrique, tesla, domotique, home-assistant, Red Hat, OpenShift, DevSecOps, devops, platform engineering, software supply chain",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1422e9e3-46a6-4272-95a7-78bebb48f2d7",
+      "name": "Définir Centres d'Intérêt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -832,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split comma-separated interests into individual items, one per embedding call\nconst text = $json.centers_of_interest || '';\nconst interests = text.split(',').map(s => s.trim()).filter(Boolean);\n\nreturn interests.map(interest => ({ json: { interest } }));"
+      },
+      "id": "7003a232-18e9-4a64-b06c-0fb023fdd2d1",
+      "name": "SplitInterests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.infomaniak.com/2/ai/<product number>/openai/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=model",
+              "value": "bge_multilingual_gemma2"
+            },
+            {
+              "name": "input",
+              "value": "={{ $json.interest }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -432,
+        720
+      ],
+      "id": "47def2d7-0753-42a9-9039-08f44546ec89",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "",
+          "name": "Bearer Auth account for InfomaniakAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build one cosine-distance SQL query per interest embedding\nreturn items.map(item => {\n  const vectorArray = item.json.data?.[0]?.embedding || item.json.embedding;\n  if (!vectorArray) throw new Error('No embedding found in response: ' + JSON.stringify(item.json));\n\n  // <=> is cosine distance — correct metric for sentence transformers\n  const formattedVector = '[' + vectorArray.map(n => Number(n.toFixed(6))).join(',') + ']';\n\n  const query = `\n    SELECT\n      id,\n      text AS contenu,\n      metadata->>'title' AS titre,\n      metadata->>'url' AS lien,\n      metadata->>'published_at' AS date_publication,\n      metadata->>'language' AS language,\n      (embedding <=> '${formattedVector}'::vector)\n        * CASE WHEN metadata->>'language' = 'fr' THEN 0.75 ELSE 1.0 END AS distance\n    FROM rss_articles\n    WHERE inserted_at > NOW() - INTERVAL '25 hours'\n    ORDER BY distance ASC\n    LIMIT 5\n  `;\n\n  return { json: { sqlQuery: query } };\n});"
+      },
+      "id": "3604251d-c74d-4615-857f-32a62c577eda",
+      "name": "BuildSearchQuery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.sqlQuery }}",
+        "options": {}
+      },
+      "id": "ae91979d-0cf4-4d00-930c-67068b613cea",
+      "name": "Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -16,
+        720
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "pgvector-rss"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicate articles across all interest queries, keep the closest distance per article\nconst seen = new Map();\nfor (const item of items) {\n  const id = String(item.json.id);\n  const dist = parseFloat(item.json.distance);\n  if (!seen.has(id) || dist < seen.get(id).distance) {\n    seen.set(id, { ...item.json, distance: dist });\n  }\n}\n\nconst articles = [...seen.values()]\n  .sort((a, b) => a.distance - b.distance)\n  .slice(0, 10)\n  .map(a => ({\n    titre: a.titre || 'Sans titre',\n    lien: a.lien || '',\n    contenu: a.contenu || 'Pas de contenu disponible',\n    date_publication: a.date_publication || ''\n  }));\n\nif (articles.length === 0) {\n  throw new Error('Aucun article trouvé dans les 30 derniers jours. La base est peut-être vide.');\n}\n\nreturn [{ json: { articles } }];"
+      },
+      "id": "76f5dfc9-2653-4576-95ee-f7a5af6518c4",
+      "name": "AggregateResults",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Tu es un assistant de veille technologique expert. Ton rôle est de synthétiser les articles les plus pertinents pour l'utilisateur.\nVoici les 10 articles sélectionnés selon ses centres d'intérêts (du plus pertinent au moins pertinent) :\n{{ $json.articles.map((item, index) => `### Article ${index + 1}: ${item.titre}\\\\nLien: ${item.lien}\\\\nContenu: ${item.contenu}`).join('\\\\n\\\\n') }}\\\n\nTâches à réaliser :\n1. **Résumés Individuels** : Pour chaque article, fais un résumé concis en 2 phrases maximum mettant en avant l'information clé. Si l'article est en anglais, fais le résumé en français. Ajoute le lien cliquable vers l'article en indiquant le site (exemple : lire la suite sur redhat.com).\n2. **Recommandation** : Termine par une courte conclusion ou une piste de réflexion/action basée sur cette lecture.\n3. Présente d'abord les articles concernant l'actualité IT et ensuite les articles domotique.\n\nFormat de sortie : HTML valide, optimisé pour un client mail. Utilise <h2> pour les sections, <ul>/<li> pour les articles, <a href=\\\"...\\\"> pour les liens, <strong> pour les titres d'articles, <p> pour les paragraphes. N'inclus pas de balise <html>, <head> ou <body> — uniquement le contenu intérieur. Aucun bloc Markdown. ",
+        "options": {
+          "systemMessage": "Tu es un assistant éditorial précis, concis et professionnel. Tu ne dois pas inventer d'informations, te baser uniquement sur le texte fourni."
+        }
+      },
+      "id": "39d12369-37da-418d-86b2-092d60916710",
+      "name": "AI Agent - Résumé",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        400,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "1af2530e-353f-4966-a3b0-3eeeafa448d9",
+      "name": "Schedule Trigger1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1024,
+        720
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "model": "google/gemma-4-31B-it",
+        "options": {}
+      },
+      "id": "083688c1-927e-44e9-bec1-88c56bcde448",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        368,
+        960
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "",
+          "name": "InfomaniakAI v2 : OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "NestorAI <nestorai@<your domain>",
+        "toEmail": "contact@<whatever>",
+        "subject": "Veille Techno",
+        "html": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        752,
+        720
+      ],
+      "id": "52113e87-a504-4f6e-8499-a336d350564b",
+      "name": "Send an Email",
+      "webhookId": "",
+      "credentials": {
+        "smtp": {
+          "id": "",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS rss_articles (\n      id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n      text       TEXT NOT NULL,\n      metadata   JSONB DEFAULT '{}',\n      embedding  VECTOR(3584),\n      inserted_at TIMESTAMPTZ DEFAULT NOW()\n  );\n\nALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS inserted_at TIMESTAMPTZ DEFAULT NOW();\n\nDELETE FROM rss_articles WHERE inserted_at < NOW() - INTERVAL '60 days';\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1056,
+        80
+      ],
+      "id": "d069e520-bc63-4419-acd9-44f8efe997ea",
+      "name": "Create and Update DB",
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "pgvector-rss"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup": {
+      "main": [
+        [
+          {
+            "node": "GetEmbedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Create and Update DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FreshRSSLogin": {
+      "main": [
+        [
+          {
+            "node": "GetToken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetToken": {
+      "main": [
+        [
+          {
+            "node": "FreshRSSGetItems-<first label>",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FreshRSSGetItems-<second label>",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FreshRSSGetItems-<first label>": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FreshRSSGetItems-<second label>": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetEmbedding": {
+      "main": [
+        [
+          {
+            "node": "PrepareInsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PrepareInsert": {
+      "main": [
+        [
+          {
+            "node": "InsertArticle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "InsertArticle": {
+      "main": [
+        [
+          {
+            "node": "Définir Centres d'Intérêt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Définir Centres d'Intérêt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Définir Centres d'Intérêt": {
+      "main": [
+        [
+          {
+            "node": "SplitInterests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SplitInterests": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "BuildSearchQuery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BuildSearchQuery": {
+      "main": [
+        [
+          {
+            "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres": {
+      "main": [
+        [
+          {
+            "node": "AggregateResults",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AggregateResults": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Résumé",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Résumé",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Résumé": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create and Update DB": {
+      "main": [
+        [
+          {
+            "node": "FreshRSSLogin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Europe/Paris",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "f7de4d6b-4c42-42c7-987b-696f04b6aa0e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "id": "",
+  "tags": []
+}
